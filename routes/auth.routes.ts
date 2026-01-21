@@ -1,4 +1,5 @@
 import { Router, Request, Response } from "express";
+import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import dotenv from "dotenv";
 import { db } from "../index";
@@ -10,12 +11,19 @@ router.post("/login", async (req, res) => {
   const { username, password } = req.body;
 
   try {
-    const user = await db.user.findUnique({
-      where: { user_name: username, user_password: password },
-      select: { user_name: true }
+    const user = await db.user.findFirst({
+      where: { user_name: username },
+      select: { user_name: true, user_password: true }
     });
 
     if (!user) {
+      res.status(401).json({ message: "Invalid credentials" });
+      return;
+    }
+
+    const passwordMatch = await bcrypt.compare(password, user.user_password);
+
+    if (!passwordMatch) {
       res.status(401).json({ message: "Invalid credentials" });
       return;
     }
@@ -44,10 +52,12 @@ router.post("/register", async (req: Request, res: Response) => {
       res.status(400).json({ message: "Username already exists" });
     }
 
+    const hashedPassword = await bcrypt.hash(password, 15);
+
     const newUser = await db.user.create({
       data: {
         user_name: username,
-        user_password: password,
+        user_password: hashedPassword,
         user_balance: balance
       }
     });
